@@ -1,0 +1,137 @@
+plugins {
+  id "application"
+  id "java"
+  id "maven"
+  id "signing"
+  id "com.github.hierynomus.license" version "0.12.1"
+  id "com.github.johnrengelman.shadow" version "1.2.3"
+}
+
+defaultTasks 'clean', 'licenseFormat', 'build'
+
+sourceCompatibility = '1.8'
+targetCompatibility = '1.8'
+
+archivesBaseName = project.name.toLowerCase()
+version = "${project.version}"
+mainClassName = "${project.group}.Main"
+
+repositories {
+    mavenCentral()
+    maven {
+        name = 'sonatype'
+        url = 'https://oss.sonatype.org/content/repositories/public/'
+    }
+}
+
+dependencies {
+    compile 'org.kitteh.irc:client-lib:1.+'
+    compile 'ninja.leaping.configurate:configurate-core:3.1.+'
+    compile 'ninja.leaping.configurate:configurate-hocon:3.1.+'
+}
+
+configure([compileJava, compileTestJava]) {
+    options.compilerArgs += ['-Xlint:all', '-Xlint:-path']
+    options.deprecation = true
+    options.encoding = 'UTF-8'
+}
+
+license {
+    ext {
+        name = project.name
+        organization = project.organization
+        url = project.url
+    }
+    header = rootProject.file('HEADER.txt')
+    ignoreFailures = false
+    strictCheck = true
+    include '**/*.java'
+    mapping {
+        java = 'SLASHSTAR_STYLE'
+    }    
+}
+
+jar {
+    manifest {
+        attributes(
+            'Built-By': System.properties['user.name'],
+            'Created-By': System.properties['java.vm.version'] + ' (' + System.properties['java.vm.vendor'] + ')',
+            'Implementation-Title': project.name,
+            'Implementation-Version': version,
+            'Implementation-Vendor': url
+        )
+    }
+}
+
+javadoc {
+    options.addStringOption('Xdoclint:none', '-quiet')
+}
+
+task sourceJar(type: Jar, dependsOn: classes) {
+    classifier = 'sources'
+    from sourceSets.main.allSource
+}
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    classifier = 'javadoc'
+    from javadoc.destinationDir
+}
+
+
+artifacts {
+    archives sourceJar
+    archives javadocJar
+}
+
+uploadArchives {
+    repositories.mavenDeployer {
+        if (version.endsWith('-SNAPSHOT')) {
+            ext.sonatypeUrl = 'https://oss.sonatype.org/content/repositories/snapshots'
+        } else {
+            ext.sonatypeUrl = 'https://oss.sonatype.org/service/local/staging/deploy/maven2'
+
+            signing {
+                required { gradle.taskGraph.hasTask("uploadArchives") }
+
+                sign configurations.archives
+
+                beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
+            }
+        }
+
+        repository(url: sonatypeUrl) {
+            authentication(userName: System.getenv("SONATYPE_USERNAME"), password: System.getenv("SONATYPE_PASSWORD"))
+        }
+
+        pom.project {
+            name = project.name
+            artifactId = archivesBaseName
+            packaging = 'jar'
+            url project.url
+
+            scm {
+                connection 'scm:git:git://github.com/InspireNXE/Alfred.git'
+                developerConnection 'scm:git:ssh://git@github.com:InspireNXE/Alfred.git'
+                url 'https://github.com/InspireNXE/Alfred'
+            }
+
+            licenses {
+                license {
+                    name 'The MIT License'
+                    url 'http://www.tldrlegal.com/license/mit-license'
+                    distribution 'repo'
+                }
+            }
+
+            organization {
+                name organization
+                url url
+            }
+
+            issueManagement {
+                system 'github'
+                url 'https://github.com/InspireNXE/Alfred/issues'
+            }
+        }
+    }
+}
